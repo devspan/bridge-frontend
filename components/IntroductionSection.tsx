@@ -1,36 +1,98 @@
-// app/components/IntroductionSection.tsx
-import React from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { FaRocket, FaShieldAlt, FaCoins, FaExchangeAlt, FaTimes, FaInfoCircle } from 'react-icons/fa';
 
 const IntroductionSection: React.FC = () => {
+  const [isVisible, setIsVisible] = useState(true);
+
+  useEffect(() => {
+    const storedVisibility = localStorage.getItem('introductionSectionVisible');
+    if (storedVisibility !== null) {
+      setIsVisible(JSON.parse(storedVisibility));
+    }
+  }, []);
+
+  const toggleVisibility = () => {
+    const newVisibility = !isVisible;
+    setIsVisible(newVisibility);
+    localStorage.setItem('introductionSectionVisible', JSON.stringify(newVisibility));
+  };
+
+  if (!isVisible) {
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        className="mb-4 text-muted-foreground hover:text-foreground"
+        onClick={toggleVisibility}
+      >
+        <FaInfoCircle className="mr-2" />
+        Show Introduction
+      </Button>
+    );
+  }
+
   return (
-    <Card className="bg-white dark:bg-gray-800 shadow-lg">
-      <CardHeader>
-        <CardTitle className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">Welcome to Rupaya Bridge</CardTitle>
-        <CardDescription>Seamlessly transfer your RUPX tokens between networks</CardDescription>
+    <Card className="bg-background border-border shadow-lg mb-6 relative">
+      <Button 
+        variant="ghost" 
+        size="icon" 
+        className="absolute top-2 right-2 text-muted-foreground hover:text-foreground"
+        onClick={toggleVisibility}
+      >
+        <FaTimes />
+      </Button>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-2xl font-bold text-foreground pr-8">Welcome to the Future of Cross-Chain Transfers</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="mb-4 text-gray-600 dark:text-gray-300">
-          Rupaya Bridge allows you to easily transfer your RUPX tokens between Rupaya and Binance Smart Chain networks,
-          expanding your DeFi opportunities and enhancing the utility of your tokens.
+        <p className="mb-4 text-muted-foreground">
+          Seamlessly transfer your RUPX tokens between Rupaya and Binance Smart Chain networks,
+          unlocking new DeFi opportunities and maximizing the potential of your assets.
         </p>
-        <h3 className="text-xl font-semibold mb-2 text-gray-800 dark:text-gray-200">Key Benefits:</h3>
-        <ul className="list-disc pl-5 mb-4 text-gray-600 dark:text-gray-300">
-          <li>Fast and secure transfers</li>
-          <li>Low transaction fees</li>
-          <li>User-friendly interface</li>
-          <li>Expand your DeFi possibilities</li>
-        </ul>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div className="bg-card p-4 rounded-lg">
+            <h3 className="text-lg font-semibold mb-2 text-card-foreground flex items-center">
+              <FaRocket className="mr-2 text-primary" />
+              Fast Transfers
+            </h3>
+            <p className="text-muted-foreground">Experience lightning-fast token transfers between networks.</p>
+          </div>
+          <div className="bg-card p-4 rounded-lg">
+            <h3 className="text-lg font-semibold mb-2 text-card-foreground flex items-center">
+              <FaShieldAlt className="mr-2 text-secondary" />
+              Enhanced Security
+            </h3>
+            <p className="text-muted-foreground">Your assets are protected by state-of-the-art security measures.</p>
+          </div>
+          <div className="bg-card p-4 rounded-lg">
+            <h3 className="text-lg font-semibold mb-2 text-card-foreground flex items-center">
+              <FaCoins className="mr-2 text-accent" />
+              Low Fees
+            </h3>
+            <p className="text-muted-foreground">Enjoy minimal transaction costs for all your bridging operations.</p>
+          </div>
+          <div className="bg-card p-4 rounded-lg">
+            <h3 className="text-lg font-semibold mb-2 text-card-foreground flex items-center">
+              <FaExchangeAlt className="mr-2 text-destructive" />
+              Expand Your DeFi Horizon
+            </h3>
+            <p className="text-muted-foreground">Access a wider range of DeFi protocols across multiple networks.</p>
+          </div>
+        </div>
+        
         <div className="flex flex-wrap gap-2">
-          <Badge variant="outline">Fast</Badge>
-          <Badge variant="outline">Secure</Badge>
-          <Badge variant="outline">Low Fees</Badge>
-          <Badge variant="outline">Cross-Chain</Badge>
+          <Badge variant="secondary" className="bg-primary text-primary-foreground">Fast</Badge>
+          <Badge variant="secondary" className="bg-secondary text-secondary-foreground">Secure</Badge>
+          <Badge variant="secondary" className="bg-accent text-accent-foreground">Low Fees</Badge>
+          <Badge variant="secondary" className="bg-destructive text-destructive-foreground">Cross-Chain</Badge>
         </div>
       </CardContent>
     </Card>
-  )
-}
+  );
+};
 
-export default IntroductionSection
+export default IntroductionSection;

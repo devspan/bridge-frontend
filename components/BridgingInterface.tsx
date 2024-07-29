@@ -1,294 +1,230 @@
-// app/components/BridgingInterface.tsx
-'use client'
-
-import React, { useState, useEffect, useCallback } from 'react'
-import { ethers } from 'ethers'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { useToast } from "@/components/ui/use-toast"
-import {
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { FaExchangeAlt, FaTrash } from 'react-icons/fa'
-import { rupayaBridge, binanceBridge, getContractWithSigner, checkNetwork, parseEther, formatEther } from '@/lib/ethers'
-import TransactionModal from './TransactionModal'
-
-interface BridgeTransaction {
-  date: string
-  from: string
-  to: string
-  amount: string
-  status: string
-  txHash: string
-}
+import React, { useState, useEffect, useCallback } from 'react';
+import WalletInfoSection from './WalletInfoSection';
+import BridgeForm from './BridgeForm';
+import TransactionHistory from './TransactionHistory';
+import { 
+  rupayaBridge, 
+  binanceBridge,
+  getUserBalance, 
+  getContractWithSigner, 
+  checkNetwork,
+  parseEther,
+  formatEther,
+  RUPAYA_RPC_URL,
+  BINANCE_TESTNET_RPC_URL
+} from '../lib/ethers';
+import { ethers } from 'ethers';
+import { useToast } from "@/components/ui/use-toast";
 
 interface BridgingInterfaceProps {
-  connectedAddress: string
+  connectedAddress: string;
 }
 
-export default function BridgingInterface({ connectedAddress }: BridgingInterfaceProps) {
-  const [sourceChain, setSourceChain] = useState('')
-  const [destinationChain, setDestinationChain] = useState('')
-  const [amount, setAmount] = useState('')
-  const [transactionStatus, setTransactionStatus] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [transactions, setTransactions] = useState<BridgeTransaction[]>([])
-  const [maxTransferAmount, setMaxTransferAmount] = useState('')
-  const [transferCooldown, setTransferCooldown] = useState('')
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [transactionHash, setTransactionHash] = useState('')
-  const { toast } = useToast()
+const BridgingInterface: React.FC<BridgingInterfaceProps> = ({ connectedAddress }) => {
+  const [sourceChain, setSourceChain] = useState('');
+  const [destinationChain, setDestinationChain] = useState('');
+  const [amount, setAmount] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [rupayaBalance, setRupayaBalance] = useState<bigint>(BigInt(0));
+  const [bscBalance, setBscBalance] = useState<bigint>(BigInt(0));
+  const [brupxBalance, setBrupxBalance] = useState<bigint>(BigInt(0));
+  const [maxTransferAmount, setMaxTransferAmount] = useState<bigint>(BigInt(0));
+  const [transferCooldown, setTransferCooldown] = useState<bigint>(BigInt(0));
+  const { toast } = useToast();
 
-  useEffect(() => {
-    const storedTransactions = localStorage.getItem(`bridgeTransactions_${connectedAddress}`)
-    if (storedTransactions) {
-      setTransactions(JSON.parse(storedTransactions))
-    }
-  }, [connectedAddress])
-
-  const updateBridgeInfo = useCallback(async () => {
-    if (!sourceChain) return
-
+  const refreshBalances = useCallback(async () => {
     try {
-      const contract = sourceChain === 'rupaya' ? 
-        await getContractWithSigner(rupayaBridge) : 
-        await getContractWithSigner(binanceBridge)
+      const rupayaProvider = new ethers.JsonRpcProvider(RUPAYA_RPC_URL);
+      const bscProvider = new ethers.JsonRpcProvider(BINANCE_TESTNET_RPC_URL);
+      
+      const rupayaBalance = await rupayaProvider.getBalance(connectedAddress);
+      const bscBalance = await bscProvider.getBalance(connectedAddress);
+      const brupxBalance = await getUserBalance(connectedAddress);
 
-      try {
-        const maxAmount = await contract.maxTransferAmount()
-        setMaxTransferAmount(formatEther(maxAmount))
-      } catch (error) {
-        console.error("Error fetching maxTransferAmount:", error)
-        setMaxTransferAmount("Error fetching")
-      }
-
-      try {
-        const cooldown = await contract.transferCooldown()
-        setTransferCooldown(cooldown.toString())
-      } catch (error) {
-        console.error("Error fetching transferCooldown:", error)
-        setTransferCooldown("Error fetching")
-      }
+      setRupayaBalance(rupayaBalance);
+      setBscBalance(bscBalance);
+      setBrupxBalance(brupxBalance);
     } catch (error) {
-      console.error("Error fetching bridge info:", error)
-      setMaxTransferAmount("Error")
-      setTransferCooldown("Error")
+      console.error('Error refreshing balances:', error);
+      toast({
+        title: "Failed to refresh balances",
+        description: "An error occurred while fetching your balances. Please try again.",
+        variant: "destructive",
+        duration: 5000,
+      });
     }
-  }, [sourceChain])
+  }, [connectedAddress, toast]);
+
+  const fetchNetworkInfo = useCallback(async () => {
+    let retries = 3;
+    while (retries > 0) {
+      try {
+        if (window.ethereum) {
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          const network = await provider.getNetwork();
+  
+          let bridgeContract;
+          if (Number(network.chainId) === 97) { // Binance Testnet
+            bridgeContract = await getContractWithSigner(binanceBridge);
+          } else if (Number(network.chainId) === 799) { // Rupaya Testnet
+            bridgeContract = await getContractWithSigner(rupayaBridge);
+          } else {
+            throw new Error('Unsupported network');
+          }
+  
+          const maxAmount = await bridgeContract.maxTransferAmount();
+          const cooldown = await bridgeContract.transferCooldown();
+  
+          setMaxTransferAmount(maxAmount);
+          setTransferCooldown(cooldown);
+          return; // Success, exit the function
+        } else {
+          throw new Error('No Ethereum provider found');
+        }
+      } catch (error) {
+        console.error('Error fetching network info:', error);
+        retries--;
+        if (retries === 0) {
+          let errorMessage = "An error occurred while fetching network information.";
+          if (error instanceof Error) {
+            errorMessage += ` Details: ${error.message}`;
+          }
+          toast({
+            title: "Failed to fetch network info",
+            description: errorMessage,
+            variant: "destructive",
+            duration: 5000,
+          });
+          setMaxTransferAmount(BigInt(0));
+          setTransferCooldown(BigInt(0));
+        } else {
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for 1 second before retrying
+        }
+      }
+    }
+  }, [toast]);
 
   useEffect(() => {
-    updateBridgeInfo()
-  }, [updateBridgeInfo])
+    const fetchData = async () => {
+      await refreshBalances();
+      await fetchNetworkInfo();
+    };
+    fetchData();
+  }, [connectedAddress, refreshBalances, fetchNetworkInfo]);
+
+  const storeTransaction = (transaction: any) => {
+    try {
+      const storedTransactions = JSON.parse(localStorage.getItem(`transactions_${connectedAddress}`) || '[]');
+      storedTransactions.push(transaction);
+      localStorage.setItem(`transactions_${connectedAddress}`, JSON.stringify(storedTransactions));
+    } catch (error) {
+      console.error('Error storing transaction:', error);
+      toast({
+        title: "Error storing transaction",
+        description: "An error occurred while storing the transaction. Please try again.",
+        variant: "destructive",
+        duration: 5000,
+      });
+    }
+  };
 
   const handleSubmit = async () => {
-    if (!sourceChain || !destinationChain || !amount) {
-      toast({ title: "Please fill all fields", variant: "destructive" })
-      return
-    }
-
-    if (sourceChain === destinationChain) {
-      toast({ title: "Source and destination chains must be different", variant: "destructive" })
-      return
-    }
-
-    if (Number(amount) > Number(maxTransferAmount)) {
-      toast({ title: `Amount exceeds maximum transfer limit of ${maxTransferAmount} RUPX`, variant: "destructive" })
-      return
-    }
-
+    setIsLoading(true);
     try {
-      setIsLoading(true)
-      setTransactionStatus('Processing...')
-      let tx: ethers.ContractTransactionResponse
-      let receipt: ethers.TransactionReceipt | null = null
-
       if (sourceChain === 'rupaya' && destinationChain === 'bsc') {
-        await checkNetwork(799) // Rupaya testnet chain ID
-        const rupayaBridgeWithSigner = await getContractWithSigner(rupayaBridge)
-        tx = await rupayaBridgeWithSigner.deposit({ value: parseEther(amount) })
-        receipt = await tx.wait()
-        addTransaction('Rupaya', 'BSC', amount, 'Completed', receipt?.hash || '')
-        toast({ title: "Deposit successful", description: "Tokens have been deposited to the Rupaya bridge." })
-      } else if (sourceChain === 'bsc' && destinationChain === 'rupaya') {
-        await checkNetwork(97) // BSC testnet chain ID
-        const binanceBridgeWithSigner = await getContractWithSigner(binanceBridge)
-        tx = await binanceBridgeWithSigner.burn(parseEther(amount))
-        receipt = await tx.wait()
-        addTransaction('BSC', 'Rupaya', amount, 'Completed', receipt?.hash || '')
-        toast({ title: "Burn successful", description: "Tokens have been burned on the Binance bridge." })
-      }
+        await checkNetwork(799); // Rupaya testnet chain ID
+        const rupayaBridgeWithSigner = await getContractWithSigner(rupayaBridge);
+        const tx = await rupayaBridgeWithSigner.deposit({ value: parseEther(amount) });
+        await tx.wait();
 
-      setTransactionStatus('Completed')
-      if (receipt?.hash) {
-        setTransactionHash(receipt.hash)
-        setIsModalOpen(true)
+        const newTransaction = {
+          date: new Date().toISOString(),
+          from: 'Rupaya',
+          to: 'BSC',
+          amount,
+          status: 'Completed',
+          txHash: tx.hash,
+        };
+        storeTransaction(newTransaction);
+
+        toast({
+          title: "Deposit successful",
+          description: "Tokens have been deposited to the Rupaya bridge.",
+          variant: "default",
+        });
+      } else if (sourceChain === 'bsc' && destinationChain === 'rupaya') {
+        await checkNetwork(97); // BSC testnet chain ID
+        const binanceBridgeWithSigner = await getContractWithSigner(binanceBridge);
+        const tx = await binanceBridgeWithSigner.burn(parseEther(amount));
+        await tx.wait();
+
+        const newTransaction = {
+          date: new Date().toISOString(),
+          from: 'BSC',
+          to: 'Rupaya',
+          amount,
+          status: 'Completed',
+          txHash: tx.hash,
+        };
+        storeTransaction(newTransaction);
+
+        toast({
+          title: "Burn successful",
+          description: "Tokens have been burned on the Binance bridge.",
+          variant: "default",
+        });
       }
     } catch (error) {
-      console.error(error)
-      setTransactionStatus('Failed')
-      toast({ 
-        title: "Transaction failed", 
+      console.error(error);
+      toast({
+        title: "Transaction failed",
         description: error instanceof Error ? error.message : "An error occurred while processing the transaction.",
-        variant: "destructive"
-      })
+        variant: "destructive",
+        duration: 5000,
+      });
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
+      refreshBalances();
     }
-  }
-
-  const addTransaction = (from: string, to: string, amount: string, status: string, txHash: string) => {
-    const newTransaction: BridgeTransaction = {
-      date: new Date().toISOString(),
-      from,
-      to,
-      amount,
-      status,
-      txHash
-    }
-    const updatedTransactions = [...transactions, newTransaction]
-    setTransactions(updatedTransactions)
-    localStorage.setItem(`bridgeTransactions_${connectedAddress}`, JSON.stringify(updatedTransactions))
-  }
-
-  const clearHistory = () => {
-    setTransactions([])
-    localStorage.removeItem(`bridgeTransactions_${connectedAddress}`)
-    toast({ title: "Transaction history cleared" })
-  }
+  };
 
   const getExplorerUrl = (txHash: string, chain: string) => {
     if (chain === 'rupaya') {
-      return `https://explorer.rupaya.io/tx/${txHash}`
+      return `${process.env.NEXT_PUBLIC_RUPAYA_EXPLORER_URL}/tx/${txHash}`;
     } else if (chain === 'bsc') {
-      return `https://testnet.bscscan.com/tx/${txHash}`
+      return `${process.env.NEXT_PUBLIC_BSC_EXPLORER_URL}/tx/${txHash}`;
     }
-    return ''
-  }
+    return '#';
+  };
 
   return (
-    <Card className="bg-white dark:bg-gray-800 shadow-lg">
-      <CardHeader>
-        <CardTitle className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">Rupaya Bridge</CardTitle>
-        <CardDescription>Transfer your RUPX tokens between networks</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-6">
-          <div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Connected Wallet: {connectedAddress}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Max Transfer Amount: {maxTransferAmount} RUPX</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Transfer Cooldown: {transferCooldown} seconds</p>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <Select onValueChange={(value) => setSourceChain(value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select source chain" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="rupaya">Rupaya</SelectItem>
-                <SelectItem value="bsc">Binance Smart Chain</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select onValueChange={(value) => setDestinationChain(value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select destination chain" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="rupaya">Rupaya</SelectItem>
-                <SelectItem value="bsc">Binance Smart Chain</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <Input
-            type="number"
-            placeholder="Enter amount"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-
-          <Button onClick={handleSubmit} disabled={isLoading} className="w-full">
-            <FaExchangeAlt className="mr-2" />
-            Bridge Tokens
-          </Button>
-
-          {transactionStatus && (
-            <div className={`p-4 rounded ${
-              transactionStatus === 'Completed' ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100' :
-              transactionStatus === 'Failed' ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100' :
-              'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100'
-            }`}>
-              Status: {transactionStatus}
-            </div>
-          )}
-
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">Transaction History</h2>
-              <Button variant="outline" size="sm" onClick={clearHistory}>
-                <FaTrash className="mr-2" />
-                Clear History
-              </Button>
-            </div>
-
-            <Table>
-              <TableCaption>A list of your recent transactions</TableCaption>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>From</TableHead>
-                  <TableHead>To</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Transaction Hash</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {transactions.map((tx, index) => (
-                  <TableRow key={index}>
-                    <TableCell>{new Date(tx.date).toLocaleString()}</TableCell>
-                    <TableCell>{tx.from}</TableCell>
-                    <TableCell>{tx.to}</TableCell>
-                    <TableCell>{tx.amount} RUPX</TableCell>
-                    <TableCell>{tx.status}</TableCell>
-                    <TableCell>
-                      <a 
-                        href={getExplorerUrl(tx.txHash, tx.from)} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline"
-                      >
-                        {tx.txHash.slice(0, 6)}...{tx.txHash.slice(-4)}
-                      </a>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-      </CardContent>
-      <TransactionModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        transactionHash={transactionHash}
-        chainExplorerUrl={sourceChain === 'rupaya' ? 'https://scan.testnet.rupaya.io' : 'https://testnet.bscscan.com'}
+    <div className="space-y-6">
+      <WalletInfoSection
+        address={connectedAddress}
+        rupayaBalance={rupayaBalance}
+        bscBalance={bscBalance}
+        brupxBalance={brupxBalance}
+        maxTransferAmount={maxTransferAmount}
+        transferCooldown={transferCooldown}
+        refreshBalances={refreshBalances}
+        fetchNetworkInfo={fetchNetworkInfo}
       />
-    </Card>
-  )
-}
+      <BridgeForm
+        sourceChain={sourceChain}
+        setSourceChain={setSourceChain}
+        destinationChain={destinationChain}
+        setDestinationChain={setDestinationChain}
+        amount={amount}
+        setAmount={setAmount}
+        handleSubmit={handleSubmit}
+        isLoading={isLoading}
+      />
+      <TransactionHistory
+        accountAddress={connectedAddress}
+        getExplorerUrl={getExplorerUrl}
+      />
+    </div>
+  );
+};
+
+export default BridgingInterface;

@@ -7,6 +7,7 @@ import Header from '@/components/Header'
 import Footer from '@/components/Footer'
 import NetworkStatus from '@/components/NetworkStatus'
 import { Toaster } from "@/components/ui/toaster"
+import { WalletProvider } from './contexts/WalletContext'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -29,15 +30,17 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <div className="flex flex-col min-h-screen">
-            <Header />
-            <main className="flex-grow container mx-auto px-4 py-8">
-              {children}
-            </main>
-            <Footer />
-          </div>
-          <NetworkStatus />
-          <Toaster />
+          <WalletProvider>
+            <div className="flex flex-col min-h-screen">
+              <Header />
+              <main className="flex-grow container mx-auto px-4 py-8">
+                {children}
+              </main>
+              <Footer />
+            </div>
+            <NetworkStatus />
+            <Toaster />
+          </WalletProvider>
         </ThemeProvider>
       </body>
     </html>

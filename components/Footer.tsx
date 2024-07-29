@@ -11,7 +11,7 @@ const Footer: React.FC = () => {
             <a href="https://rupaya.io" target="_blank" rel="noopener noreferrer" className="flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">
               <FaHome className="mr-2" /> Home
             </a>
-            <a href="https://explorer.rupaya.io" target="_blank" rel="noopener noreferrer" className="flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">
+            <a href="https://scan.testnet.rupaya.io" target="_blank" rel="noopener noreferrer" className="flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">
               <FaSearch className="mr-2" /> Explorer
             </a>
             <a href="https://twitter.com/rupayacoin" target="_blank" rel="noopener noreferrer" className="flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">
