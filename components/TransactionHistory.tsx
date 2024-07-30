@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -34,12 +34,28 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({
   const [transactions, setTransactions] = useState<BridgeTransaction[]>([]);
   const { toast } = useToast();
 
-  useEffect(() => {
-    const storedTransactions = localStorage.getItem(`transactions_${accountAddress}`);
-    if (storedTransactions) {
-      setTransactions(JSON.parse(storedTransactions));
+  const fetchTransactions = useCallback(async () => {
+    try {
+      const storedTransactions = localStorage.getItem(`transactions_${accountAddress}`);
+      if (storedTransactions) {
+        setTransactions(JSON.parse(storedTransactions));
+      }
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+      toast({
+        title: "Failed to fetch transactions",
+        description: "An error occurred while retrieving your transaction history.",
+        variant: "destructive",
+        duration: 5000,
+      });
     }
-  }, [accountAddress]);
+  }, [accountAddress, toast]);
+
+  useEffect(() => {
+    fetchTransactions(); // Initial fetch
+    const interval = setInterval(fetchTransactions, 5000); // Polling every 5 seconds
+    return () => clearInterval(interval); // Cleanup on unmount
+  }, [fetchTransactions]);
 
   const clearHistory = () => {
     localStorage.removeItem(`transactions_${accountAddress}`);
